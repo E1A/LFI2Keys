@@ -34,5 +34,20 @@ LFI to SSH Private Keys - Automated Looting Script
 [+] Done (～￣▽￣)～
 ```
 
+## Options
+```bash
+  -h, --help            show this help message and exit
+  -u URL, --url URL     LFI URL pointing to /etc/passwd
+  -l LIST, --list LIST  Wordlist containing SSH private key names
+  -o OUTPUT, --output OUTPUT
+                        File to save found private key URLs and contents
+  -p PROXY, --proxy PROXY
+                        Proxy URL (e.g., http://127.0.0.1:8080)
+  -v, --verbose         Enable verbose mode for debugging
+  -a, --all             Also search the entire home directory (not just .ssh folder)
+  -c, --continue-as-success
+                        Continue scanning all users for private keys even after a match is found
+```
+
 ### Credits
 - [PinoyWH1Z](https://github.com/PinoyWH1Z) for his [SSH private key wordlists](https://github.com/PinoyWH1Z/SSH-Private-Key-Looting-Wordlists).
