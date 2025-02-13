@@ -209,7 +209,7 @@ def main():
     parser.add_argument("-p", "--proxy", help="Proxy URL (e.g., http://127.0.0.1:8080)", default=None)
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose mode for debugging")
     parser.add_argument("-a", "--all", action="store_true", help="Also search the entire home directory (not just .ssh folder)")
-    parser.add_argument("-c", "--continue-as-success", action="store_true",
+    parser.add_argument("-c", "--continue-on-success", action="store_true",
                         help="Continue scanning all users for private keys even after a match is found")
     args = parser.parse_args()
 

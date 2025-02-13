@@ -45,7 +45,7 @@ LFI to SSH Private Keys - Automated Looting Script
                         Proxy URL (e.g., http://127.0.0.1:8080)
   -v, --verbose         Enable verbose mode for debugging
   -a, --all             Also search the entire home directory (not just .ssh folder)
-  -c, --continue-as-success
+  -c, --continue-on-success
                         Continue scanning all users for private keys even after a match is found
 ```
 
