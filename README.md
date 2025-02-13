@@ -10,7 +10,7 @@ Provide the full URL of the vulnerable endpoint where you can read the `/etc/pas
 
   _    ___ ___ ___ _  _______   _____ 
  | |  | __|_ _|_  ) |/ / __\ \ / / __|
- | |__| _| | | / /| ' <| _| \ V /\__ \
+ | |__| _| | | / /|   <| _| \ V /\__ \
  |____|_| |___/___|_|\_\___| |_| |___/
 
 LFI to SSH Private Keys - Automated Looting Script
