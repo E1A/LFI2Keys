@@ -229,7 +229,7 @@ def main():
             key_wordlist = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
         sys.exit(f"{RED}[-]{RESET} Wordlist file '{args.list}' not found")
-    found_keys = fuzz_ssh_keys_for_users(args.url, valid_users, key_wordlist, args.proxy, args.all, args.continue_as_success, args.verbose, found_ssh_users)
+    found_keys = fuzz_ssh_keys_for_users(args.url, valid_users, key_wordlist, args.proxy, args.all, args.continue_on_success, args.verbose, found_ssh_users)
     if args.output and found_keys:
         with open(args.output, "w") as f:
             for url, key_content in found_keys:
