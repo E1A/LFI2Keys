@@ -49,5 +49,9 @@ LFI to SSH Private Keys - Automated Looting Script
                         Continue scanning all users for private keys even after a match is found
 ```
 
+## Disclaimer
+The script provided is for educational purposes only, I am not responsible for your actions.
+
+
 ### Credits
 - [PinoyWH1Z](https://github.com/PinoyWH1Z) for his [SSH private key wordlists](https://github.com/PinoyWH1Z/SSH-Private-Key-Looting-Wordlists).
