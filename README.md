@@ -1,8 +1,12 @@
 ## Summary
 Found a local file inclusion or path traversal vulnerability? Automate the extraction of SSH private keys with LFI2keys. It uses the exposed `/etc/passwd` file to extract valid users, checks for commonly named SSH keys, and gathers useful SSH configuration details from `/etc/ssh/sshd_config`.
 
+<br>
+
 ## Usage
 Provide the full URL of the vulnerable endpoint where you can read the `/etc/passwd` file, and supply a private key [wordlist](https://github.com/PinoyWH1Z/SSH-Private-Key-Looting-Wordlists). Use the `-v` parameter for verbose output and for printing the found private key.
+
+<br>
 
 ```bash
 ┌──(kali㉿DC07 | 2025-02-12 00:13:37)-[~]
@@ -34,6 +38,8 @@ LFI to SSH Private Keys - Automated Looting Script
 [+] Done (～￣▽￣)～
 ```
 
+<br>
+
 ## Options
 ```bash
   -h, --help            show this help message and exit
@@ -49,8 +55,12 @@ LFI to SSH Private Keys - Automated Looting Script
                         Continue scanning all users for private keys even after a match is found
 ```
 
+<br>
+
 ## Disclaimer
 The script provided is for educational purposes only, I am not responsible for your actions.
+
+<br>
 
 
 ### Credits
